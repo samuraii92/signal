@@ -177,24 +177,23 @@ setInterval(() => {
     // جلب توكنات جديدة فقط إذا كان الخزان أقل من الرقم المستهدف (targetBankSize)
     const needed = targetBankSize - tokenBank.length;
     if (needed > 0) {
-        // حماية: جلب 4 توكنات كحد أقصى في كل دورة حتى لا ينحظر السيرفر من Castlebreaker
+        // حماية: جلب 4 توكنات كحد أقصى في كل دورة
         const batchSize = Math.min(needed, 4); 
         for (let i = 0; i < batchSize; i++) {
-            sessionTokensBurned++; // زيادة العداد لمعرفة استهلاكك
             fetchFreshToken().then(token => {
                 if (token) { 
+                    sessionTokensBurned++; // ✅ تم نقله للداخل: الآن يحسب التوكن الناجح فقط!
                     tokenBank.push({ token, timestamp: Date.now() }); 
                     console.log(`[+] Harvested. Bank: ${tokenBank.length}/${targetBankSize}`); 
                 }
             });
         }
     }
-}, 10000); // الفحص يتم كل 10 ثواني
-
+}, 10000);
 // ==============================================================
 // 📡 الويب سوكيت (إدارة المتصفحات وتوزيع التوكنات)
 // ==============================================================
-let isSignalLocked = false; // 🔴 قفل الإشارة المركزي
+let isSignalLocked = false;
 
 wss.on('connection', (ws) => {
     ws.isAlive = true;
