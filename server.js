@@ -144,13 +144,28 @@ app.get('/api/stats', (req, res) => {
 // ==============================================================
 async function fetchFreshToken() {
     try {
+        // 1. تصحيح صيغة البروكسي (Castlebreaker لا يفهم socks5h)
+        let formattedProxy = CB_PROXY.trim();
+        if (formattedProxy.startsWith("socks5h://")) {
+            formattedProxy = formattedProxy.replace("socks5h://", "socks5://");
+        }
+
         const res = await fetch("https://castlebreaker.cc/getRecaptchaV3", {
             method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": CB_API_KEY },
-            body: JSON.stringify({ url: TARGET_URL, sitekey: SITE_KEY, action: "SlotSelection", enterprise: true, proxy: CB_PROXY })
+            body: JSON.stringify({ url: TARGET_URL, sitekey: SITE_KEY, action: "SlotSelection", enterprise: true, proxy: formattedProxy })
         });
         const data = await res.json();
-        if (data.status === "success" && data.data) return data.data.token;
-    } catch (e) {} return null;
+        
+        // 2. طباعة الخطأ في السجلات إذا رفض Castlebreaker إعطاء توكن
+        if (data.status === "success" && data.data) {
+            return data.data.token;
+        } else {
+            console.error("[-] Castlebreaker API Error:", JSON.stringify(data));
+        }
+    } catch (e) {
+        console.error("[-] Fetch Request Failed:", e.message);
+    } 
+    return null;
 }
 
 // ♻️ محرك الصيانة: يحرق القديم ويجلب الجديد حسب الرقم الذي حددته أنت في الواجهة
