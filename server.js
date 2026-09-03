@@ -179,6 +179,8 @@ setInterval(() => {
 // ==============================================================
 // 📡 الويب سوكيت (إدارة المتصفحات وتوزيع التوكنات)
 // ==============================================================
+let isSignalLocked = false; // 🔴 قفل الإشارة المركزي
+
 wss.on('connection', (ws) => {
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
@@ -191,25 +193,35 @@ wss.on('connection', (ws) => {
             let action = (strMsg === "FIRE_SLOT") ? "FIRE_SLOT" : JSON.parse(strMsg).action;
 
             if (action === "FIRE_SLOT") {
-                console.log(`[⚡] STRIKE SIGNAL! Broadcasting to ${wss.clients.size - 1} bots...`);
-                wss.clients.forEach(client => { if (client !== ws && client.readyState === 1) client.send("FIRE_SLOT"); });
+                // 1. حماية التكرار: إذا كانت الإشارة مقفلة، تجاهل الطلب تماماً
+                if (isSignalLocked) return; 
+                
+                isSignalLocked = true;
+                setTimeout(() => { isSignalLocked = false; }, 15000); // فتح القفل بعد 15 ثانية
+
+                console.log(`[⚡] STRIKE SIGNAL! Distributing tokens to ${wss.clients.size - 1} snipers...`);
+                
+                // 2. التوزيع العكسي الذكي
+                wss.clients.forEach(client => { 
+                    if (client !== ws && client.readyState === 1) {
+                        let assignedToken = "";
+                        // سحب توكن من الخزان إذا كان متوفراً وإعطائه لهذه الصفحة
+                        if (tokenBank.length > 0) {
+                            assignedToken = tokenBank.pop().token;
+                        }
+                        // دمج التوكن داخل رسالة الإشارة
+                        client.send(JSON.stringify({ type: "FIRE_SLOT", token: assignedToken }));
+                    } 
+                });
             } 
             else if (action === "GET_TOKEN") {
-                // 1. إذا كان الخزان يحتوي على توكن، أعطه فوراً (0 ثانية تأخير)
                 if (tokenBank.length > 0) {
                     const freshest = tokenBank.pop(); 
                     ws.send(JSON.stringify({ type: "TOKEN_DELIVERY", token: freshest.token }));
-                    console.log(`[✔] Delivered from Bank. Remaining: ${tokenBank.length}`);
-                } 
-                // 2. حالة الطوارئ (Emergency): دخلت صفحات أكثر من التوكنات المتاحة
-                else {
-                    console.log(`[!] Bank empty. Emergency Fetch Triggered!`);
-                    sessionTokensBurned++; // حساب الاستهلاك
+                } else {
+                    sessionTokensBurned++;
                     fetchFreshToken().then(token => { 
-                        if (token) {
-                            ws.send(JSON.stringify({ type: "TOKEN_DELIVERY", token }));
-                            console.log(`[✔] Emergency Token Delivered.`);
-                        }
+                        if (token) ws.send(JSON.stringify({ type: "TOKEN_DELIVERY", token }));
                     });
                 }
             }
